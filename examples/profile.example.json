@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "full_name": "Fictional Candidate",
+    "preferred_email": "candidate@example.invalid"
+  },
+  "locations": {
+    "brazil": {
+      "cv_location": "São Paulo, Brazil"
+    },
+    "united_states": {
+      "cv_location": "Miami, FL, USA"
+    }
+  },
+  "work_authorization": {
+    "united_states": {
+      "authorized_for_target_employer": null,
+      "future_sponsorship_required": null
+    }
+  },
+  "compensation": {
+    "salary_base_floors": {
+      "BRL": {
+        "monthly": 20000
+      },
+      "USD": {
+        "annual": 96000
+      }
+    }
+  },
+  "facts": [
+    {
+      "id": "fixture-1",
+      "text": "Structured payment partnerships at a fictional employer.",
+      "source": "synthetic example; replace privately",
+      "date": "2026-10-27",
+      "confirmation": "confirmed",
+      "source_kind": "candidate_declaration"
+    }
+  ]
+}

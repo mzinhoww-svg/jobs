@@ -1,0 +1,11 @@
+# Replace the host with the private deployed origin and obtain the token securely.
+# Do not commit real tokens or candidate URLs.
+POST https://jobs.example.invalid/applications
+Authorization: Bearer <private-token>
+Content-Type: application/json
+
+{"url":"https://job-boards.greenhouse.io/fictional/jobs/123","mode":"prepare"}
+
+### Status
+GET https://jobs.example.invalid/applications/<id>
+Authorization: Bearer <private-token>

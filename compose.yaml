@@ -1,0 +1,49 @@
+services:
+  init:
+    image: jobs-service:local
+    command: ["python", "-m", "jobs_service.admin", "init", "--data-dir", "/var/lib/jobs"]
+    volumes: ["jobs-private:/var/lib/jobs"]
+    network_mode: none
+    restart: "no"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  api:
+    image: jobs-service:local
+    depends_on:
+      init: {condition: service_completed_successfully}
+    ports: ["127.0.0.1:8787:8787"]
+    environment:
+      JOBS_ALLOWED_HOSTS: ${JOBS_ALLOWED_HOSTS:-job-boards.greenhouse.io,boards.greenhouse.io,boards.eu.greenhouse.io}
+    volumes: ["jobs-private:/var/lib/jobs"]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; assert urllib.request.urlopen('http://127.0.0.1:8787/healthz',timeout=5).status==200"]
+      interval: 20s
+      timeout: 8s
+      retries: 3
+  worker:
+    image: jobs-service:local
+    command: ["python", "-m", "jobs_service.worker"]
+    depends_on:
+      init: {condition: service_completed_successfully}
+    environment:
+      JOBS_ALLOWED_HOSTS: ${JOBS_ALLOWED_HOSTS:-job-boards.greenhouse.io,boards.greenhouse.io,boards.eu.greenhouse.io}
+    volumes: ["jobs-private:/var/lib/jobs"]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    shm_size: 256mb
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 90s
+    healthcheck:
+      test: [CMD, python, -c, "import time,pathlib; assert time.time()-float(pathlib.Path('/var/lib/jobs/worker-heartbeat').read_text())<90"]
+      interval: 20s
+      timeout: 8s
+      retries: 3
+volumes:
+  jobs-private:

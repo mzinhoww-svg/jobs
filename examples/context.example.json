@@ -1,0 +1,45 @@
+{
+  "country": {
+    "value": "BR",
+    "source": "official hiring terms",
+    "date": "2026-10-27",
+    "confirmation": "confirmed",
+    "source_kind": "candidate_declaration"
+  },
+  "answers": {
+    "Notice period": {
+      "value": "30 days",
+      "source": "synthetic candidate declaration",
+      "date": "2026-10-27",
+      "confirmation": "confirmed",
+      "source_kind": "candidate_declaration"
+    }
+  },
+  "salary_field": {
+    "label": "Expected base salary",
+    "currency": "USD",
+    "period": "annual",
+    "kind": "base"
+  },
+  "salary_research": {
+    "currency": "USD",
+    "period": "annual",
+    "kind": "base",
+    "min": 140000,
+    "max": 180000,
+    "official": true,
+    "sources": [
+      {
+        "url": "https://company.example.invalid/jobs/123",
+        "date": "2026-10-27",
+        "type": "synthetic_official_range"
+      }
+    ],
+    "rationale": "Synthetic example: same role, country, employment regime and base period; replace with actual verified sources."
+  },
+  "email_verification": {
+    "allowed_sender_domains": [
+      "portal.example.invalid"
+    ]
+  }
+}

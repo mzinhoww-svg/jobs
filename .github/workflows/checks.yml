@@ -1,0 +1,13 @@
+name: checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build with verified dependencies
+        run: docker build --secret id=system_ca,src=/etc/ssl/certs/ca-certificates.crt -t jobs-service:ci .
+      - name: Controlled tests without external network
+        run: docker run --rm --network none --shm-size=256m --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges jobs-service:ci python -m unittest discover -s tests -v
