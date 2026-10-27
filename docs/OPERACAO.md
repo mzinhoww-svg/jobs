@@ -1,5 +1,21 @@
 # Operação e retomada
 
+## Acesso LetsCloud na retomada de 27/10/2026
+
+A implantação na VPS existente está autorizada. Não solicitar novamente autorização de rotina nem credenciais pelo chat. A API funciona com `API_LETSCLOUD_KEY` no header `api-token` para `https://core.letscloud.io/api/instances`; usar somente GET para inspeção, sem registrar resposta integral (ela pode incluir senha inicial). Não usar o hostname genérico `api.letscloud.io` como evidência de validade da chave: a documentação aponta `core.letscloud.io/api`.
+
+Para continuar, é necessário que a configuração suportada do ambiente permita TCP para o destino indicado em `IP_letsCloud`, porta SSH, e que o proxy TCP esteja disponível. A fotografia atual tem listas TCP vazias, sem VPN, e o proxy recusou conexão. Não tentar conexão direta nem outro proxy para contornar a restrição. `SSH_PRIVATE_KEY` está presente, porém não carregou como chave privada; verificar/corrigir a vinculação pelo gerenciador de segredos, sem enviar seu conteúdo ao chat. A senha existente pode ser usada apenas se transporte e cliente suportarem, preservando a verificação da identidade do host. Não houve tentativa de login remoto.
+
+Falta uma identidade de host confiável: não foram encontrados arquivos `known_hosts` nos caminhos padrão verificados. Obter fingerprint/chave de host por canal autenticado do provedor ou inventário confiável e validar antes de aceitar. `ssh-keyscan` isolado não autentica a identidade; não usar `StrictHostKeyChecking=no`.
+
+Após acesso: inventariar SO, uso de RAM/disco, Docker/Compose, containers, portas, firewall, DNS e certificados; preservar serviços e alterações existentes. Escolher ingresso HTTPS e armazenamento persistente com base nesse inventário. Aplicar e validar inicialização automática, healthchecks e backup/restauração sem reiniciar serviços alheios. Não há URL privada de produção para compartilhar nesta retomada.
+
+Fontes privadas preservadas em `/workspace/private-onboarding`, pacote em `/workspace/attachments` e perfil canônico preparado em `/workspace/jobs-private-runtime/profile.json`. Não substituir por `examples`. Conferir hashes e permissões antes da transferência segura para volume privado na VPS. A fila preparada estava íntegra e vazia; não importar histórico de referência como candidaturas.
+
+Gmail permanente exige OAuth da conta correta, escopo `gmail.readonly`, armazenado como `gmail-oauth.json` no diretório privado do serviço, 0600 e proprietário do worker. Configurar consentimento/credenciais por canal seguro externo ao chat; não herdar a conexão do plugin. Nenhum arquivo assim foi encontrado sob `/workspace`; não foi possível procurar dentro da VPS. Após disponibilizar OAuth, executar `Gmail(arquivo, email_confirmado_do_perfil).verify_identity()` no executor permanente, sem imprimir e-mail/tokens. Testar correlação com contexto autorizado antes de declarar verificações por Gmail funcionais; nunca enviar e-mail.
+
+Quando o ingresso privado HTTPS estiver validado, compartilhar links pela interface: abrir o endereço, inserir token privado por canal seguro, colar a URL oficial e escolher `analyze`, `prepare` ou `apply`. `apply` autoriza envio daquela URL e só deve ser usado com novo link explicitamente autorizado. Esta conversa não enfileira links automaticamente. Até lá, não apresentar o loopback de desenvolvimento como endereço de produção.
+
 ## Dados e confiança
 
 O pacote recebido não é versionado. O perfil privado preserva categorias e fontes do JSON original. CVs de referência não comprovam envio nem verificam independentemente seus fatos. O histórico recuperado não foi importado como fila de candidaturas. Não há link novo autorizado para envio real.

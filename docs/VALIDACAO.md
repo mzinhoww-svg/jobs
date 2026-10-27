@@ -2,6 +2,14 @@
 
 Data: 2026-10-27. Não há candidatura real autorizada nesta implantação. Nenhuma vaga ou documento de referência foi usado para enviar candidatura.
 
+## Nova verificação da retomada LetsCloud
+
+Em 27/10/2026, `uv run python -m unittest discover -s tests -v` aprovou os 35 testes em 12,611 s. A imagem existente `jobs-service:local` aprovou os mesmos 35 em 10,113 s com `--network none --shm-size=256m --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges`. São testes controlados, incluindo Chromium e reinício lógico da fila sem reenvio. Não houve reinício da VPS nem validação de persistência em produção.
+
+API LetsCloud autenticada validada por GET no endpoint oficial; VPS correspondente ligada, 1 vCPU, 2 GB de RAM, disco provisionado de 50 GB. SSH não alcançado: política TCP sem destinos liberados e conexão ao proxy TCP configurado recusada. Chave privada cadastrada não carregou no `ssh-keygen`; senha não testada remotamente. Nenhuma identidade de servidor foi aceita ou ignorada. Inspeção interna de SO, disco livre, Docker, serviços, firewall e domínios permanece bloqueada por acesso, assim como configuração e validação de HTTPS, backup agendado e recuperação na VPS.
+
+Perfil e documentos privados foram localizados fora do checkout; perfil válido com permissões privadas, banco com `integrity_check=ok` e zero entradas. Não há OAuth Gmail encontrado no workspace; disponibilidade na VPS desconhecida. Não se declara Gmail funcional. Os resultados históricos abaixo continuam sendo evidências de desenvolvimento, não de produção. A autorização da VPS agora existe; o bloqueio atual é transporte/autenticação verificável, não ausência de autorização do usuário.
+
 ## Verificado
 
 - 35 testes `unittest` executados e aprovados no Python 3.12 do ambiente e na imagem Docker, inclusive Chromium real em rede externa desabilitada.
