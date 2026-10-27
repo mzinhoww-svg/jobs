@@ -23,7 +23,7 @@ python -m uvicorn jobs_service.api:factory --factory --host 127.0.0.1 --port 878
 python -m jobs_service.worker
 ```
 
-Ambos usam a mesma configuração privada. A interface simples na raiz permite colar URL, selecionar `apply`, `prepare` ou `analyze` e consultar estados com token. O token fica apenas na memória da página; não é salvo em localStorage. Atrás de ingresso privado com HTTPS, ela é o canal de entrada de fallback. Esta conversa **não** está automaticamente conectada à fila.
+Ambos usam a mesma configuração privada. O painel na raiz permite validar o token, colar URL, selecionar `apply`, `prepare` ou `analyze` e acompanhar fila, estados, histórico, documentos e comprovação. A opção “Lembrar neste navegador” salva o token localmente somente após autenticação válida; use apenas em dispositivo pessoal. Sair remove o token salvo. Sem essa opção, ele fica somente na memória da página. Atrás de ingresso privado com HTTPS, ela é o canal de entrada de fallback. Esta conversa **não** está automaticamente conectada à fila.
 
 ## API
 
@@ -72,3 +72,21 @@ Um container no executor do Codex valida empacotamento, mas não prova disponibi
 - `docs/OPERACAO.md`: retomada, backup e retenção.
 - `docs/VALIDACAO.md`: evidências e lacunas de acesso/implantação.
 - `docs/PROGRESSO.md`: continuidade sem refazer auditoria ou etapas concluídas.
+
+## Atualizar uma VPS já instalada
+
+Para a instalação existente em `~/jobs`, com o arquivo privado `../candidaturas.vps.json`:
+
+```sh
+cd ~/jobs
+git pull --ff-only
+bash deploy/update-ui.sh
+```
+
+O atualizador verifica projeto e volume existentes, testa a imagem, cria backup privado da base e documentos, preserva o token e atualiza somente API e worker. Em falha de ativação, tenta restaurar a imagem anterior. Não altera Caddy nem outros projetos. Use `bash deploy/update-ui.sh --check` para verificar os pré-requisitos sem atualizar. O backup exclui credenciais e sessões; preserve separadamente os segredos privados.
+
+Depois de `PAINEL_ATUALIZADO`, recarregue a página com Ctrl+Shift+R (Mac: Cmd+Shift+R). Informe o token atual da aplicação, não a chave de IA ou uma senha criada em outra variável. O painel valida a autenticação antes de mostrar os dados. Não envie o token pelo chat.
+
+O painel mostra disponibilidade do worker, perfil confirmado, pesquisa e filtros, histórico real de eventos e exportação JSON. Não apresenta estimativa fictícia de porcentagem. Workday não tem adaptador de envio; o painel explica essa limitação. Appllama não está integrado: exportar JSON não sincroniza com esse serviço. Nenhuma conexão Gmail do ChatGPT é transferida para a aplicação, e esta atualização não modifica Gmail.
+
+Os testes controlados não comprovam uma candidatura real nem validam o perfil pessoal em produção. O serviço deve permanecer bloqueado quando faltarem dados confirmados ou suporte ao ATS.

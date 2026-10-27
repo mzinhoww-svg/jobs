@@ -49,3 +49,13 @@ Limitações menores registradas da revisão: gravação de sessão do navegador
 | Retenção automática | Política/manual e backups testados | Sem expurgo agendado; revisão manual conforme política |
 
 Nenhum desses itens é resolvido por um PID, healthcheck ou saída zero de teste. O serviço **não é declarado operacional em produção**. O registro da configuração no rascunho do ambiente não publica versão nem implanta produção. Revise/salve as alterações e publique o ambiente no produto quando desejar reusar a configuração de desenvolvimento; isso continua distinto de provisionar o serviço permanente.
+
+## Painel 0.2.0
+
+- Login com token validado antes de persistir; normalização de espaços, aspas externas e prefixo Bearer. Token incorreto e variável `token2` não ganham acesso.
+- Testes reais de Chromium: armazenamento opcional, recarga, logout, histórico registrado, download autenticado de PDF, exportação, pesquisa, layout móvel e texto externo sem execução de HTML.
+- Listagem paginada e filtrada com consultas parametrizadas; total, prontidão e detalhes autenticados. Nenhum dado do perfil aparece em `/system/status`.
+- Atualizador recusa instalação ausente, configuração ausente e mudança do volume privado antes de modificar containers.
+- Imagem Docker usa diretórios graváveis temporários para Chromium/Crashpad; não depende de um diretório home inexistente.
+
+A execução controlada não é comprovação de atualização da VPS. A implantação existente deve executar `deploy/update-ui.sh` e apresentar `PAINEL_ATUALIZADO`; o login deve então ser conferido no navegador. Gmail e Appllama não foram validados como integrações operacionais.

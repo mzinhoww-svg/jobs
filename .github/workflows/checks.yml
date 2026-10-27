@@ -7,6 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Read-only VPS installer checks
+        run: |
+          python3 -m unittest discover -s tests -p test_vps_installer.py -v
+          python3 -m unittest discover -s tests -p test_ui_updater.py -v
       - name: Build with verified dependencies
         run: docker build --secret id=system_ca,src=/etc/ssl/certs/ca-certificates.crt -t jobs-service:ci .
       - name: Controlled tests without external network

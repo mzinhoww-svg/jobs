@@ -76,9 +76,33 @@ class Store:
             row = c.execute('SELECT * FROM applications WHERE id=?', (id,)).fetchone()
             return dict(row) if row else None
 
-    def list(self):
+    def _filters(self, q='', state=None):
+        where, args=[], []
+        if state:
+            if state not in STATES: raise ValueError('INVALID_STATE')
+            where.append('status=?');args.append(state)
+        if q:
+            literal=q.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
+            pattern='%'+literal+'%'
+            where.append("(url LIKE ? ESCAPE '\\' OR json_extract(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END,'$.job.title') LIKE ? ESCAPE '\\' OR json_extract(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END,'$.job.company') LIKE ? ESCAPE '\\')")
+            args.extend([pattern]*3)
+        return (' WHERE '+' AND '.join(where) if where else ''), args
+
+    def list(self, limit=200, offset=0, q='', state=None):
+        if not 1<=limit<=200 or offset<0: raise ValueError('INVALID_PAGINATION')
+        where,args=self._filters(q,state)
         with self.db() as c:
-            return [dict(r) for r in c.execute('SELECT * FROM applications ORDER BY created DESC LIMIT 200')]
+            return [dict(r) for r in c.execute('SELECT * FROM applications'+where+' ORDER BY created DESC,id DESC LIMIT ? OFFSET ?',[*args,limit,offset])]
+
+    def count(self, q='', state=None):
+        where,args=self._filters(q,state)
+        with self.db() as c:
+            return c.execute('SELECT COUNT(*) FROM applications'+where,args).fetchone()[0]
+
+    def counts(self):
+        with self.db() as c:
+            by_status={r['status']:r['n'] for r in c.execute('SELECT status,COUNT(*) AS n FROM applications GROUP BY status')}
+        return {'total':sum(by_status.values()),'by_status':by_status}
 
     def history(self, id):
         with self.db() as c:

@@ -11,7 +11,7 @@ services:
     image: jobs-service:local
     depends_on:
       init: {condition: service_completed_successfully}
-    ports: ["127.0.0.1:8787:8787"]
+    ports: ["127.0.0.1:${JOBS_HTTP_PORT:-8787}:8787"]
     environment:
       JOBS_ALLOWED_HOSTS: ${JOBS_ALLOWED_HOSTS:-job-boards.greenhouse.io,boards.greenhouse.io,boards.eu.greenhouse.io}
     volumes: ["jobs-private:/var/lib/jobs"]

@@ -14,6 +14,6 @@ RUN groupadd -g 10001 jobs && useradd --uid 10001 --gid 10001 --no-create-home j
 COPY --chown=10001:10001 jobs_service ./jobs_service
 COPY --chown=10001:10001 tests ./tests
 USER 10001:10001
-ENV JOBS_DATA_DIR=/var/lib/jobs JOBS_CHROMIUM=/usr/bin/chromium
+ENV JOBS_DATA_DIR=/var/lib/jobs JOBS_CHROMIUM=/usr/bin/chromium HOME=/tmp XDG_CONFIG_HOME=/tmp/.config XDG_CACHE_HOME=/tmp/.cache
 EXPOSE 8787
 CMD ["python","-m","uvicorn","jobs_service.api:factory","--factory","--host","0.0.0.0","--port","8787","--no-access-log"]

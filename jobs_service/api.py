@@ -1,12 +1,17 @@
 import secrets
 import json
+import time
+from pathlib import Path
 from typing import Literal
-from fastapi import FastAPI, Header, HTTPException, Depends
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Header, HTTPException, Depends, Query
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from .config import Settings
-from .policy import public_url
-from .store import Store
+from .policy import public_url, verified_fact
+from .store import Store, STATES
+from .presentation import summary, result_view
+
+WEB_ROOT=Path(__file__).with_name('web')
 
 
 class Submission(BaseModel):
@@ -21,7 +26,9 @@ def create_app(settings):
     app=FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     def authenticated(authorization: str = Header(default='')):
-        if not secrets.compare_digest(authorization.encode(), ('Bearer '+token).encode()):
+        parts=authorization.strip().split(None,1)
+        presented=parts[1].strip() if len(parts)==2 and parts[0].lower()=='bearer' else ''
+        if not secrets.compare_digest(presented.encode(),token.encode()):
             raise HTTPException(401,'AUTHENTICATION_REQUIRED',headers={'WWW-Authenticate':'Bearer'})
 
     @app.middleware('http')
@@ -39,23 +46,37 @@ def create_app(settings):
 
     @app.get('/', response_class=HTMLResponse)
     def ui():
-        return '''<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Candidaturas privadas</title>
-<h1>Candidaturas privadas</h1><p>Entrada autenticada. Enviar autoriza a candidatura; preparar e analisar não fazem upload.</p>
-<label>Token <input id="token" type="password" autocomplete="off"></label>
-<form id="form"><label>URL da vaga <input id="url" type="url" required></label>
-<select id="mode"><option value="apply">Candidatar</option><option value="prepare">Preparar</option><option value="analyze">Analisar</option></select>
-<button>Adicionar à fila</button></form><button id="refresh">Atualizar estados</button><pre id="result"></pre><script src="/ui.js"></script></html>'''
+        return HTMLResponse((WEB_ROOT/'index.html').read_text())
 
     @app.get('/ui.js')
     def js():
-        from fastapi.responses import Response
-        return Response('''const el=id=>document.getElementById(id);
-async function request(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+el('token').value,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});el('result').textContent=JSON.stringify(await r.json(),null,2);}
-el('form').addEventListener('submit',e=>{e.preventDefault();request('/applications',{url:el('url').value,mode:el('mode').value});});
-el('refresh').addEventListener('click',()=>request('/applications'));''',media_type='application/javascript')
+        return FileResponse(WEB_ROOT/'ui.js',media_type='application/javascript')
+
+    @app.get('/ui.css')
+    def css():
+        return FileResponse(WEB_ROOT/'ui.css',media_type='text/css')
 
     def public(row):
-        return {k:row[k] for k in ('id','status','reason','mode','created','updated','attempts')}
+        return summary(row)
+
+    @app.get('/system/status',dependencies=[Depends(authenticated)])
+    def system_status():
+        age=None
+        try:
+            age=time.time()-float((settings.data_dir/'worker-heartbeat').read_text())
+            if age<0: age=None
+        except (OSError,ValueError): pass
+        facts=0
+        configured=False
+        try:
+            profile=json.loads((settings.data_dir/'profile.json').read_text())
+            facts=sum(verified_fact(f) for f in profile.get('facts',[]) if isinstance(f,dict))
+            configured=bool(profile.get('identity',{}).get('full_name') and profile.get('identity',{}).get('preferred_email') and facts)
+        except (OSError,ValueError,TypeError,AttributeError): pass
+        return {'version':'0.2.0',
+                'worker':{'state':'unknown' if age is None else ('ready' if age<90 else 'stale'),'heartbeat_age_seconds':round(age,1) if age is not None else None},
+                'profile':{'configured':configured,'confirmed_facts':facts},'counts':store.counts(),
+                'capabilities':{'greenhouse':'controlled_tests','workday':False,'appllama':False}}
 
     @app.post('/applications',dependencies=[Depends(authenticated)])
     def submit(body: Submission):
@@ -69,20 +90,15 @@ el('refresh').addEventListener('click',()=>request('/applications'));''',media_t
         return JSONResponse({**public(row),'duplicate':duplicate},status_code=200 if duplicate else 201)
 
     @app.get('/applications',dependencies=[Depends(authenticated)])
-    def listing(): return [public(x) for x in store.list()]
+    def listing(limit:int=Query(default=200,ge=1,le=200),offset:int=Query(default=0,ge=0),q:str=Query(default='',max_length=200),state:str=Query(default='')):
+        if state and state not in STATES: raise HTTPException(422,'INVALID_STATE')
+        return JSONResponse([public(x) for x in store.list(limit,offset,q,state or None)],headers={'X-Total-Count':str(store.count(q,state or None))})
 
     @app.get('/applications/{id}',dependencies=[Depends(authenticated)])
     def status(id: str):
         row=store.get(id)
         if not row: raise HTTPException(404,'NOT_FOUND')
-        data=json.loads(row['payload'])
-        job=data.get('job',{})
-        result={'job':{k:job[k] for k in ('title','company','country','language') if k in job},
-                'ats':data.get('ats'),'documents':data.get('documents',{}),
-                'proof':data.get('proof')}
-        salary=data.get('salary') or {}
-        result['salary']={k:salary[k] for k in ('chosen','currency','period','kind','sources','rationale') if k in salary}
-        return {**public(row),'history':store.history(id),'result':result}
+        return {**public(row),'history':store.history(id),'result':result_view(row)}
 
     @app.get('/applications/{id}/documents/{name}',dependencies=[Depends(authenticated)])
     def document(id: str, name: Literal['cv.pdf','cv.docx','cover-letter.pdf','cover-letter.docx']):

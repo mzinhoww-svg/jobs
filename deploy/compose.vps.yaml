@@ -1,0 +1,23 @@
+# Additional limits for a shared 2 GB VPS. Never start a second reverse proxy.
+services:
+  init:
+    image: candidaturas-jobs:${JOBS_IMAGE_TAG:-v1}
+    mem_limit: 128m
+    cpus: 0.25
+  api:
+    image: candidaturas-jobs:${JOBS_IMAGE_TAG:-v1}
+    mem_limit: 192m
+    cpus: 0.25
+  worker:
+    image: candidaturas-jobs:${JOBS_IMAGE_TAG:-v1}
+    mem_limit: 768m
+    memswap_limit: 1024m
+    cpus: 0.70
+volumes:
+  jobs-private:
+    labels:
+      io.candidaturas.install-root: ${JOBS_INSTALL_ROOT:-/opt/candidaturas-cloud}
+networks:
+  default:
+    labels:
+      io.candidaturas.install-root: ${JOBS_INSTALL_ROOT:-/opt/candidaturas-cloud}

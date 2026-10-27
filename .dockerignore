@@ -2,5 +2,9 @@
 !requirements.lock
 !jobs_service/
 !jobs_service/*.py
+!jobs_service/web/
+!jobs_service/web/*.html
+!jobs_service/web/*.css
+!jobs_service/web/*.js
 !tests/
 !tests/*.py
