@@ -64,3 +64,9 @@ Se a atualização terminou mas apareceu `AI_SETUP_FAILED: AI_PROVIDER_FAILED`, 
 `INSUFFICIENT_CREDITS` identifica HTTP 402; `CREDENTIAL_REJECTED` identifica 401/403; `MODEL_OR_ENDPOINT_NOT_FOUND` identifica 404; `RATE_LIMITED` identifica 429; `MODEL_OUTPUT_TRUNCATED` distingue uma resposta 200 interrompida por limite de tokens. Esses códigos orientam a próxima correção. O diagnóstico não ativa a IA nem declara sucesso quando a chamada falha.
 
 Se a chave já responde mas a configuração falha com `JOB_METADATA_INCOMPLETE`, o problema é o antigo teste que usava uma vaga fictícia. A configuração atual valida somente a conexão e uma resposta JSON mínima do modelo, independentemente da análise de vagas. Execute `git pull --ff-only` e `bash deploy/configure-ai.sh openrouter`. Containers da versão 0.3 executam o novo configurador sem rebuild. `AI_CONFIGURED` comprova conexão e gravação privada da chave; análise e candidatura reais continuam dependendo de validação própria.
+
+## Importar perfil pelo navegador
+
+Quando o console remoto cortar comandos longos, prefira o upload por HTTPS. No checkout atualizado, execute `bash deploy/profile-setup.sh https://seu-painel.example`. O script verifica a instalação existente, atualiza a imagem se a funcionalidade ainda não estiver presente e imprime um link temporário. Abra o link e selecione o JSON privado fornecido fora do Git.
+
+O link funciona uma vez e expira em 15 minutos. Sua autorização fica no fragmento da URL, é removida imediatamente do endereço pelo navegador e não é persistida no armazenamento do navegador. Somente o hash é salvo no volume privado. A validação recusa estruturas de perfil incompatíveis e preserva uma cópia do perfil anterior. Uma falha de gravação consome o link; gere outro para tentar novamente. Não existe endpoint público irrestrito de edição do perfil, mesmo quando o painel estiver configurado sem autenticação.

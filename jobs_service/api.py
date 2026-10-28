@@ -3,7 +3,7 @@ import json
 import time
 from pathlib import Path
 from typing import Literal
-from fastapi import FastAPI, Header, HTTPException, Depends, Query
+from fastapi import FastAPI, Header, HTTPException, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from .config import Settings
@@ -11,6 +11,7 @@ from .policy import public_url, verified_fact, approved_hosts
 from .store import Store, STATES
 from .presentation import summary, result_view, payload
 from .intelligence import public_ai_status
+from .profile_setup import link_valid,consume_link
 
 WEB_ROOT=Path(__file__).with_name('web')
 
@@ -50,6 +51,27 @@ def create_app(settings):
             'Referrer-Policy':'no-referrer', 'X-Frame-Options':'DENY',
             'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'"})
         return response
+
+    @app.get('/profile-setup')
+    def profile_setup_page():
+        return FileResponse(WEB_ROOT/'profile-setup.html',media_type='text/html')
+
+    @app.get('/profile-setup.js')
+    def profile_setup_js():
+        return FileResponse(WEB_ROOT/'profile-setup.js',media_type='application/javascript')
+
+    @app.post('/setup/profile')
+    async def profile_setup_upload(request:Request):
+        setup_token=request.headers.get('X-Profile-Setup','')
+        if not link_valid(settings.data_dir,setup_token): raise HTTPException(401,'PROFILE_SETUP_UNAVAILABLE')
+        raw=await request.body()
+        if len(raw)>65536: raise HTTPException(413,'PROFILE_TOO_LARGE')
+        try:
+            profile=json.loads(raw)
+            count=consume_link(settings.data_dir,setup_token,profile)
+        except PermissionError: raise HTTPException(401,'PROFILE_SETUP_UNAVAILABLE') from None
+        except (ValueError,TypeError,KeyError): raise HTTPException(422,'INVALID_PROFILE_OR_CONFIRMED_FACTS_MISSING') from None
+        return {'status':'PRIVATE_PROFILE_IMPORTED','confirmed_facts':count}
 
     @app.get('/auth/config')
     def auth_config():

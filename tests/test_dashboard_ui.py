@@ -169,3 +169,23 @@ class OpenAccessBrowserTests(unittest.IsolatedAsyncioTestCase):
         await self.page.locator('#submit-job').click()
         await expect(self.page.locator('#detail')).to_be_visible()
         self.assertEqual(self.store.count(),2)
+
+
+class ProfileUploadBrowserTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp=DashboardBrowserTests.asyncSetUp
+    asyncTearDown=DashboardBrowserTests.asyncTearDown
+
+    async def test_one_time_browser_upload_removes_fragment_and_imports_profile(self):
+        import json
+        from jobs_service.profile_setup import issue_link
+        from test_profile_setup import PROFILE
+        token=issue_link(self.root)
+        await self.page.goto(self.url+'/profile-setup#'+token)
+        await expect(self.page.locator('#profile-upload')).to_be_visible()
+        self.assertNotIn(token,self.page.url)
+        await self.page.locator('#profile-file').set_input_files({'name':'profile.json','mimeType':'application/json','buffer':json.dumps(PROFILE).encode()})
+        await self.page.locator('#profile-send').click()
+        await expect(self.page.locator('#profile-message')).to_contain_text('Perfil importado com sucesso')
+        self.assertEqual(json.loads((self.root/'profile.json').read_text())['identity']['full_name'],'Fictional Candidate')
+        self.assertNotIn(token,await self.page.evaluate('JSON.stringify(localStorage)'))
+        await expect(self.page.locator('#profile-upload')).to_be_hidden()
