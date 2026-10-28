@@ -87,3 +87,18 @@ class DashboardApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result['has_proof'])
         self.assertTrue(result['history'])
         self.assertEqual(result['status'],'ENVIO_INCERTO')
+
+    async def test_explicit_no_token_mode_allows_access_without_a_token_file(self):
+        from dataclasses import replace
+        settings=replace(self.settings,auth_mode='none')
+        settings.token_file.unlink()
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_app(settings)),base_url='http://testserver') as client:
+            self.assertEqual((await client.get('/auth/config')).json(),{'required':False})
+            self.assertEqual((await client.get('/applications')).status_code,200)
+            self.assertEqual((await client.get('/system/status')).json()['authentication_required'],False)
+            response=await client.post('/applications',json={'url':'https://example.com/jobs/public-fixture','mode':'analyze'})
+            self.assertEqual(response.status_code,201)
+
+    async def test_auth_config_does_not_disable_default_protection(self):
+        self.assertEqual((await self.client.get('/auth/config')).json(),{'required':True})
+        self.assertEqual((await self.client.get('/applications')).status_code,401)

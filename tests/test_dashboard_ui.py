@@ -32,7 +32,7 @@ class DashboardBrowserTests(unittest.IsolatedAsyncioTestCase):
         documents=generate_documents({'full_name':'Fictional Candidate','preferred_email':'fixture@example.invalid','location':'São Paulo, Brazil','facts':[{'id':'f1','text':'Structured payments partnerships.','source_kind':'candidate_declaration','confirmation':'confirmed','source':'controlled fixture','date':'2026-10-27'}]}, {'title':'Payments Lead','company':'Fictional Labs','description':'Payments partnerships','language':'en'},output)
         self.pdf=(output/'cv.pdf').read_bytes()
         self.store.finish(self.row['id'],'fixture','DOCUMENTOS_PRONTOS','PREPARE_COMPLETE_NO_UPLOAD',{'job':{'title':'Payments Lead','company':'Fictional Labs','country':'BR'},'documents':documents,'ats':'Greenhouse'})
-        app=create_app(Settings(self.root,key,('example.com',)))
+        app=create_app(Settings(self.root,key,('example.com',),auth_mode=getattr(self,'auth_mode','bearer')))
         self.sock=socket.socket();self.sock.bind(('127.0.0.1',0));self.sock.listen()
         self.url='http://127.0.0.1:'+str(self.sock.getsockname()[1])
         self.server=uvicorn.Server(uvicorn.Config(app,log_level='error',access_log=False,loop='asyncio'))
@@ -131,3 +131,23 @@ class DashboardBrowserTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(TOKEN,exported)
         self.assertIn('Payments Lead',exported)
         self.assertIn('DOCUMENTOS_PRONTOS',exported)
+
+
+class OpenAccessBrowserTests(unittest.IsolatedAsyncioTestCase):
+    auth_mode='none'
+    asyncSetUp=DashboardBrowserTests.asyncSetUp
+    asyncTearDown=DashboardBrowserTests.asyncTearDown
+
+    async def test_no_token_opens_dashboard_clears_stored_secret_and_queues(self):
+        await expect(self.page.locator('#dashboard')).to_be_visible()
+        await expect(self.page.locator('#login')).to_be_hidden()
+        await expect(self.page.locator('.sidebar-bottom')).to_contain_text('Acesso público')
+        await self.page.evaluate("localStorage.setItem('candidaturas.token','obsolete-synthetic-token')")
+        await self.page.reload()
+        await expect(self.page.locator('#rows tr')).to_have_count(1)
+        self.assertIsNone(await self.page.evaluate("localStorage.getItem('candidaturas.token')"))
+        await self.page.locator('#job-url').fill('https://example.com/jobs/no-token')
+        await self.page.locator('#mode').select_option('analyze')
+        await self.page.locator('#submit-job').click()
+        await expect(self.page.locator('#detail')).to_be_visible()
+        self.assertEqual(self.store.count(),2)

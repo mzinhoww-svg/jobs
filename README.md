@@ -90,3 +90,9 @@ Depois de `PAINEL_ATUALIZADO`, recarregue a página com Ctrl+Shift+R (Mac: Cmd+S
 O painel mostra disponibilidade do worker, perfil confirmado, pesquisa e filtros, histórico real de eventos e exportação JSON. Não apresenta estimativa fictícia de porcentagem. Workday não tem adaptador de envio; o painel explica essa limitação. Appllama não está integrado: exportar JSON não sincroniza com esse serviço. Nenhuma conexão Gmail do ChatGPT é transferida para a aplicação, e esta atualização não modifica Gmail.
 
 Os testes controlados não comprovam uma candidatura real nem validam o perfil pessoal em produção. O serviço deve permanecer bloqueado quando faltarem dados confirmados ou suporte ao ATS.
+
+## Acesso sem token (opção explícita)
+
+Para a VPS já instalada, execute `git pull --ff-only` e `bash deploy/disable-token.sh` dentro do checkout. O script guarda a configuração privada anterior, define `JOBS_AUTH_MODE=none` somente na API e usa o atualizador existente. A página abre diretamente no painel, sem armazenar ou pedir token. O arquivo do token existente não é apagado.
+
+**Com essa opção, qualquer pessoa com o endereço pode ler candidaturas, baixar documentos, adicionar vagas e solicitar ações disponíveis na fila.** O limite de ATS e as verificações de comprovação continuam valendo. Use apenas quando esse acesso público for intencional. Para voltar à proteção, configure `JOBS_AUTH_MODE=bearer` na API do arquivo privado de Compose e recrie somente a API. Valores desconhecidos impedem a inicialização; o padrão permanece `bearer`.

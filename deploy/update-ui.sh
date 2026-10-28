@@ -119,12 +119,14 @@ c=http.client.HTTPConnection('127.0.0.1',8787,timeout=10)
 c.request('GET','/system/status',headers={'Authorization':'Bearer '+token})
 r=c.getresponse()
 assert r.status==200, 'AUTHENTICATED_STATUS_FAILED'
-assert json.loads(r.read())['version']=='0.2.0', 'UNEXPECTED_APP_VERSION'
+status=json.loads(r.read())
+assert status['version']=='0.2.0', 'UNEXPECTED_APP_VERSION'
 c.close()
 c=http.client.HTTPConnection('127.0.0.1',8787,timeout=10)
 c.request('GET','/applications')
-assert c.getresponse().status==401, 'AUTHENTICATION_WAS_DISABLED'
-print('AUTH_OK: token atual preservado; acesso anonimo continua bloqueado.')
+expected=401 if status.get('authentication_required',True) else 200
+assert c.getresponse().status==expected, 'ACCESS_MODE_CHECK_FAILED'
+print('ACCESS_OK: modo de acesso verificado; arquivo de token preservado.')
 PY
 activated=false
 printf 'PAINEL_ATUALIZADO: salvar token, acompanhamento e historico disponiveis.\n'

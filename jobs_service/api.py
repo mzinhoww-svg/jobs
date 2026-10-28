@@ -26,6 +26,7 @@ def create_app(settings):
     app=FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     def authenticated(authorization: str = Header(default='')):
+        if settings.auth_mode=='none': return
         parts=authorization.strip().split(None,1)
         presented=parts[1].strip() if len(parts)==2 and parts[0].lower()=='bearer' else ''
         if not secrets.compare_digest(presented.encode(),token.encode()):
@@ -38,6 +39,10 @@ def create_app(settings):
             'Referrer-Policy':'no-referrer', 'X-Frame-Options':'DENY',
             'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'"})
         return response
+
+    @app.get('/auth/config')
+    def auth_config():
+        return {'required':settings.auth_mode!='none'}
 
     @app.get('/healthz')
     def health():
@@ -73,7 +78,7 @@ def create_app(settings):
             facts=sum(verified_fact(f) for f in profile.get('facts',[]) if isinstance(f,dict))
             configured=bool(profile.get('identity',{}).get('full_name') and profile.get('identity',{}).get('preferred_email') and facts)
         except (OSError,ValueError,TypeError,AttributeError): pass
-        return {'version':'0.2.0',
+        return {'version':'0.2.0','authentication_required':settings.auth_mode!='none',
                 'worker':{'state':'unknown' if age is None else ('ready' if age<90 else 'stale'),'heartbeat_age_seconds':round(age,1) if age is not None else None},
                 'profile':{'configured':configured,'confirmed_facts':facts},'counts':store.counts(),
                 'capabilities':{'greenhouse':'controlled_tests','workday':False,'appllama':False}}
