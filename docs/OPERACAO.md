@@ -56,3 +56,9 @@ Política inicial: manter documentos/evidências enquanto a candidatura estiver 
 É preciso um destino já autorizado com execução contínua de containers ou processos, volume durável, acesso de implantação, ingresso privado com HTTPS e política de saída. A máquina gerenciada de desenvolvimento não fornece essas garantias por manter um processo ativo. Nenhum custo recorrente foi contratado.
 
 Gmail requer OAuth `gmail.readonly` no executor de produção e teste mínimo de identidade da conta. Uma conexão de outro cliente não é herdada. Nenhum segredo deve ser fornecido no chat. Ajustar hosts permitidos para cada portal oficial e recursos necessários; cada redirect inicial é validado, redirects inesperados no browser são bloqueados. O proxy do runtime gerenciado resolve DNS e aplica a política externa; uma implantação própria exige controle equivalente, inclusive contra DNS rebinding.
+
+## Falha de configuração da IA
+
+Se a atualização terminou mas apareceu `AI_SETUP_FAILED: AI_PROVIDER_FAILED`, a integração não foi ativada e a chave nova não foi salva. Para obter um diagnóstico sem rebuild nem alterar a configuração, atualize o checkout e execute `bash deploy/diagnose-ai.sh openrouter` (ou `gateway`). Informe a chave no campo oculto. O script envia somente uma vaga e uma evidência sintéticas e imprime `AI_DIAGNOSTIC` com HTTP, categoria e resultado de validação; não imprime chave, resposta livre nem perfil.
+
+`INSUFFICIENT_CREDITS` identifica HTTP 402; `CREDENTIAL_REJECTED` identifica 401/403; `MODEL_OR_ENDPOINT_NOT_FOUND` identifica 404; `RATE_LIMITED` identifica 429; `MODEL_OUTPUT_TRUNCATED` distingue uma resposta 200 interrompida por limite de tokens. Esses códigos orientam a próxima correção. O diagnóstico não ativa a IA nem declara sucesso quando a chamada falha.
