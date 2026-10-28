@@ -56,7 +56,7 @@ class Store:
         self._event(c,row['id'],'RECEBIDA' if not row['owner'] else row['status'],'MODE_PROMOTED_TO_'+mode.upper())
         return True
 
-    def submit(self, url, mode='apply'):
+    def submit(self, url, mode='apply', posting=None):
         if mode not in ('apply', 'analyze', 'prepare'):
             raise ValueError('INVALID_MODE')
         url = canonical_url(url)
@@ -65,9 +65,17 @@ class Store:
             c.execute('BEGIN IMMEDIATE')
             old = c.execute('SELECT * FROM applications WHERE url=?', (url,)).fetchone()
             if old:
+                if posting is not None:
+                    if old['owner'] or old['intent']: raise ValueError('POSTING_UPDATE_NOT_ALLOWED')
+                    data=json.loads(old['payload']);data['manual_posting']=posting
+                    data.update({'documents':{},'tailoring':None,'salary':None,'job':{},'proof':None})
+                    c.execute("UPDATE applications SET payload=?,status='RECEBIDA',reason=NULL,available=0,attempts=0 WHERE id=?",(json.dumps(data),old['id']))
+                    self._event(c,old['id'],'RECEBIDA','POSTING_UPDATED')
                 self._promote(c,old,mode)
                 return dict(c.execute('SELECT * FROM applications WHERE id=?',(old['id'],)).fetchone()), True
             c.execute('INSERT INTO applications(id,url,mode,status,created,updated) VALUES(?,?,?,?,?,?)', (id, url, mode, 'RECEBIDA', now, now))
+            if posting is not None:
+                c.execute('UPDATE applications SET payload=? WHERE id=?',(json.dumps({'manual_posting':posting}),id))
             self._event(c, id, 'RECEBIDA')
         return self.get(id), False
 

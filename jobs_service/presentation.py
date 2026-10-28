@@ -15,7 +15,7 @@ def result_view(row):
     job=data.get('job') if isinstance(data.get('job'),dict) else {}
     salary=data.get('salary') if isinstance(data.get('salary'),dict) else {}
     result={'job':{k:job[k] for k in ('title','company','country','language') if k in job},
-            'ats':data.get('ats'),'documents':data.get('documents',{}),'proof':data.get('proof')}
+            'ats':data.get('ats'),'documents':data.get('documents',{}),'proof':data.get('proof'),'tailoring':data.get('tailoring')}
     result['salary']={k:salary[k] for k in ('chosen','currency','period','kind','sources','rationale') if k in salary}
     return result
 

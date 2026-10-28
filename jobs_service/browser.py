@@ -8,36 +8,46 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import urlsplit
 from playwright.async_api import async_playwright, TimeoutError as BrowserTimeout
-from .policy import Blocked, public_url, detect_ats
+from .policy import Blocked, public_url, detect_ats, approved_hosts
 
 
 async def parse_posting(page):
     objects=[]
     for raw in await page.locator('script[type="application/ld+json"]').all_text_contents():
-        try:
-            obj=json.loads(raw)
+        try: obj=json.loads(raw)
         except (ValueError,TypeError): continue
-        objects.extend(obj if isinstance(obj,list) else obj.get('@graph',[obj]))
-    posting=next((x for x in objects if x.get('@type')=='JobPosting'),{})
-    title=posting.get('title') or (await page.locator('h1').first.inner_text() if await page.locator('h1').count() else '')
+        values=obj if isinstance(obj,list) else obj.get('@graph',[obj]) if isinstance(obj,dict) else []
+        if isinstance(values,dict): values=[values]
+        if isinstance(values,list): objects.extend(x for x in values if isinstance(x,dict))
+    posting=next((x for x in objects if x.get('@type')=='JobPosting' or isinstance(x.get('@type'),list) and 'JobPosting' in x['@type']),{})
+    title=posting.get('title') if isinstance(posting.get('title'),str) else ''
+    if not title and await page.locator('h1').count(): title=await page.locator('h1').first.inner_text()
     org=posting.get('hiringOrganization',{})
+    if not isinstance(org,dict): org={}
     location=posting.get('jobLocation',{})
     if isinstance(location,list): location=location[0] if len(location)==1 else {}
-    country=location.get('address',{}).get('addressCountry')
+    if not isinstance(location,dict): location={}
+    address=location.get('address',{})
+    if not isinstance(address,dict): address={}
+    country=address.get('addressCountry')
     if isinstance(country,dict): country=country.get('name')
+    if not isinstance(country,str): country=None
     country={'Brazil':'BR','Brasil':'BR','United States':'US','USA':'US'}.get(country,country)
     base=posting.get('baseSalary',{})
     value=base.get('value',{}) if isinstance(base,dict) else {}
+    if not isinstance(value,dict): value={}
     salary={}
     if value.get('minValue') and value.get('maxValue'):
         salary={'min':value['minValue'],'max':value['maxValue'],'currency':base.get('currency'),
-                'period':{'MONTH':'monthly','YEAR':'annual'}.get(value.get('unitText')),
+                'period':{'MONTH':'monthly','YEAR':'annual'}.get(value.get('unitText')) if isinstance(value.get('unitText'),str) else None,
                 'kind':'base','official':True,'sources':[{'url':page.url,'date':date.today().isoformat(),'type':'official_job_posting'}],
                 'rationale':'Published base range for this exact position; compare employment regime before answering.'}
-    return {'title':title,'company':org.get('name',''),'country':country,
+    company=org.get('name','')
+    description=posting.get('description')
+    if not isinstance(description,str): description=await page.locator('body').inner_text()
+    return {'title':title[:300],'company':company[:300] if isinstance(company,str) else '','country':country,
             'language':(await page.locator('html').get_attribute('lang') or 'en').split('-')[0],
-            'description':posting.get('description') or (await page.locator('body').inner_text())[:60000],
-            'salary':salary,'canonical_url':page.url}
+            'description':description[:60000],'salary':salary,'canonical_url':page.url}
 
 
 def normalized(label):
@@ -189,7 +199,7 @@ class BrowserSession:
         self.context=await self.browser.new_context(**context_args)
         async def guarded(route):
             try:
-                public_url(route.request.url,self.settings.allowed_hosts,resolve=not bool(proxy))
+                public_url(route.request.url,approved_hosts(route.request.url,self.settings.allowed_hosts),resolve=not bool(proxy))
             except (ValueError,OSError):
                 await route.abort('blockedbyclient')
             else:

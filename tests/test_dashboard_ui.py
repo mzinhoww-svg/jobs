@@ -101,19 +101,14 @@ class DashboardBrowserTests(unittest.IsolatedAsyncioTestCase):
         await expect(self.page.locator('#rows tr')).to_have_count(1)
         await expect(self.page.locator('#rows')).to_contain_text('Payments Lead')
 
-    async def test_explicit_mode_workday_limit_and_actual_queue_progress(self):
+    async def test_workday_url_is_queued_and_actual_progress_stays_honest(self):
         await self.login()
         await self.page.locator('#job-url').fill('https://mastercard.wd1.myworkdayjobs.com/jobs/123')
         await self.page.locator('#submit-job').click()
-        await expect(self.page.locator('#notice')).to_contain_text('Workday')
-        self.assertEqual(self.store.count(),1)
-        await self.page.locator('#job-url').fill('https://example.com/jobs/new')
-        await self.page.locator('#mode').select_option('prepare')
-        await self.page.locator('#submit-job').click()
         await expect(self.page.locator('#detail')).to_be_visible()
-        row=next(x for x in self.store.list() if x['url']=='https://example.com/jobs/new')
-        self.assertEqual(row['mode'],'prepare')
-        self.assertEqual(row['status'],'RECEBIDA')
+        self.assertEqual(self.store.count(),2)
+        row=next(x for x in self.store.list() if 'myworkdayjobs' in x['url'])
+        self.assertEqual(row['mode'],'apply')
         claimed=self.store.claim('fixture')
         self.store.finish(claimed['id'],'fixture','BLOQUEADA','PRIVATE_PROFILE_MISSING')
         await self.page.get_by_role('button',name=re.compile('Atualizar histórico')).click()
@@ -131,6 +126,29 @@ class DashboardBrowserTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(TOKEN,exported)
         self.assertIn('Payments Lead',exported)
         self.assertIn('DOCUMENTOS_PRONTOS',exported)
+
+    async def test_manual_description_and_complete_package_download(self):
+        await self.login()
+        await self.page.get_by_text('Se o portal bloquear a leitura: informar a descrição da vaga',exact=True).click()
+        await self.page.locator('#posting-title').fill('Product Lead')
+        await self.page.locator('#posting-company').fill('Fictional Labs')
+        await self.page.locator('#posting-description').fill('Lead payment partnerships and coordinate product strategy across business and operations teams.')
+        await self.page.locator('#posting-country').select_option('BR')
+        await self.page.locator('#job-url').fill('https://custom.example.org/job/abc')
+        await self.page.locator('#submit-job').click()
+        await expect(self.page.locator('#detail')).to_be_visible()
+        row=next(x for x in self.store.list() if 'custom.example.org' in x['url'])
+        import json,zipfile
+        self.assertEqual(json.loads(row['payload'])['manual_posting']['company'],'Fictional Labs')
+        self.assertEqual(await self.page.locator('#posting-description').input_value(),'')
+        await self.page.locator('#close-detail').click()
+        await self.page.get_by_role('button',name='Ver detalhes').last.click()
+        async with self.page.expect_download() as result:
+            await self.page.get_by_role('button',name='↓ Baixar pacote CV + carta + análise',exact=True).click()
+        download=await result.value
+        with zipfile.ZipFile(await download.path()) as z:
+            self.assertIn('cv.pdf',z.namelist());self.assertIn('cover-letter.docx',z.namelist())
+            self.assertIn('tailoring-report.json',z.namelist())
 
 
 class OpenAccessBrowserTests(unittest.IsolatedAsyncioTestCase):

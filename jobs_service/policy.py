@@ -55,6 +55,25 @@ def public_url(url, allowed_hosts=None, resolve=True):
     return url
 
 
+PLATFORM_DOMAINS={
+    'greenhouse.io':'Greenhouse','myworkdayjobs.com':'Workday','myworkdaysite.com':'Workday',
+    'lever.co':'Lever','gupy.io':'Gupy','ashbyhq.com':'Ashby','smartrecruiters.com':'SmartRecruiters',
+    'icims.com':'iCIMS','taleo.net':'Taleo','successfactors.com':'SuccessFactors',
+    'successfactors.eu':'SuccessFactors','linkedin.com':'LinkedIn','indeed.com':'Indeed',
+    'indeed.com.br':'Indeed','personio.de':'Personio','personio.com':'Personio','jobvite.com':'Jobvite','workable.com':'Workable','recruitee.com':'Recruitee','teamtailor.com':'Teamtailor','avature.net':'Avature'}
+
+
+def platform_name(url):
+    host=(urlsplit(url).hostname or '').lower()
+    return next((name for domain,name in PLATFORM_DOMAINS.items() if host==domain or host.endswith('.'+domain)),None)
+
+
+def approved_hosts(url, configured):
+    """Known public ATS domains can be read; arbitrary hosts require pasted text."""
+    host=urlsplit(url).hostname
+    return tuple(dict.fromkeys([*configured,*([host] if platform_name(url) else [])]))
+
+
 def detect_ats(url, frames):
     for candidate in [url, *frames]:
         p = urlsplit(candidate)
@@ -66,6 +85,9 @@ def detect_ats(url, frames):
             query = dict(parse_qsl(p.query))
             if '/embed/job_app' in p.path and query.get('for') and query.get('token', '').isdigit():
                 return 'Greenhouse', f"greenhouse:{query['for']}:{query['token']}"
+    for candidate in [url,*frames]:
+        name=platform_name(candidate)
+        if name: return name,None
     return 'DESCONHECIDO', None
 
 
@@ -106,3 +128,15 @@ def choose_salary(research, annual_floors, fit=.5):
         raise Blocked('SALARY_LOW_CONFIDENCE')
     chosen = max(floor, low + (high - low) * max(0, min(1, fit)))
     return {**research, 'chosen': round(chosen, 2)}
+
+
+def document_profile_view(profile,country):
+    if country in ('BR','US'):
+        return profile_view(profile,country)
+    identity=profile['identity']
+    view={k:identity.get(k) for k in ('full_name','preferred_email')}
+    for key in ('phone','linkedin'):
+        value=identity.get(key)
+        view[key]=value.get('value') if isinstance(value,dict) and verified_fact(value) else value if isinstance(value,str) else None
+    view['facts']=[f for f in profile.get('facts',[]) if verified_fact(f)]
+    return view

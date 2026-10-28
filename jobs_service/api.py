@@ -7,17 +7,28 @@ from fastapi import FastAPI, Header, HTTPException, Depends, Query
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from .config import Settings
-from .policy import public_url, verified_fact
+from .policy import public_url, verified_fact, approved_hosts
 from .store import Store, STATES
-from .presentation import summary, result_view
+from .presentation import summary, result_view, payload
+from .intelligence import public_ai_status
 
 WEB_ROOT=Path(__file__).with_name('web')
+
+
+class Posting(BaseModel):
+    model_config=ConfigDict(extra='forbid',str_strip_whitespace=True)
+    title: str=Field(min_length=2,max_length=300)
+    company: str=Field(min_length=2,max_length=300)
+    description: str=Field(min_length=50,max_length=60000)
+    country: Literal['BR','US'] | None=None
+    language: Literal['en','pt']='en'
 
 
 class Submission(BaseModel):
     model_config = ConfigDict(extra='forbid')
     url: str = Field(max_length=4096)
     mode: Literal['apply', 'analyze', 'prepare']
+    posting: Posting | None=None
 
 
 def create_app(settings):
@@ -78,20 +89,21 @@ def create_app(settings):
             facts=sum(verified_fact(f) for f in profile.get('facts',[]) if isinstance(f,dict))
             configured=bool(profile.get('identity',{}).get('full_name') and profile.get('identity',{}).get('preferred_email') and facts)
         except (OSError,ValueError,TypeError,AttributeError): pass
-        return {'version':'0.2.0','authentication_required':settings.auth_mode!='none',
+        return {'version':'0.3.0','authentication_required':settings.auth_mode!='none',
                 'worker':{'state':'unknown' if age is None else ('ready' if age<90 else 'stale'),'heartbeat_age_seconds':round(age,1) if age is not None else None},
                 'profile':{'configured':configured,'confirmed_facts':facts},'counts':store.counts(),
-                'capabilities':{'greenhouse':'controlled_tests','workday':False,'appllama':False}}
+                'capabilities':{'greenhouse':'controlled_tests','workday':False,'appllama':False,'documents_any_platform':True,'url_reader':'public_readonly_chromium','ai':public_ai_status(settings.data_dir)}}
 
     @app.post('/applications',dependencies=[Depends(authenticated)])
     def submit(body: Submission):
         try:
             # Admission does not fetch. DNS resolution belongs to the egress
             # boundary; managed proxies resolve destination DNS themselves.
-            url=public_url(body.url,settings.allowed_hosts,resolve=False)
+            url=public_url(body.url,None,resolve=False)
         except (ValueError,OSError):
             raise HTTPException(422,'URL_NOT_APPROVED') from None
-        row,duplicate=store.submit(url,body.mode)
+        try: row,duplicate=store.submit(url,body.mode,body.posting.model_dump() if body.posting else None)
+        except ValueError: raise HTTPException(409,'POSTING_UPDATE_NOT_ALLOWED') from None
         return JSONResponse({**public(row),'duplicate':duplicate},status_code=200 if duplicate else 201)
 
     @app.get('/applications',dependencies=[Depends(authenticated)])
@@ -108,12 +120,33 @@ def create_app(settings):
     @app.get('/applications/{id}/documents/{name}',dependencies=[Depends(authenticated)])
     def document(id: str, name: Literal['cv.pdf','cv.docx','cover-letter.pdf','cover-letter.docx']):
         from fastapi.responses import FileResponse
-        if not store.get(id): raise HTTPException(404,'NOT_FOUND')
+        row=store.get(id)
+        if not row: raise HTTPException(404,'NOT_FOUND')
+        if name not in (payload(row).get('documents') or {}): raise HTTPException(404,'DOCUMENTS_NOT_READY')
         root=(settings.data_dir/'applications').resolve()
         path=(root/id/name).resolve()
         if not path.is_relative_to(root) or not path.is_file():
             raise HTTPException(404,'NOT_FOUND')
         return FileResponse(path,filename=name)
+
+    @app.get('/applications/{id}/bundle',dependencies=[Depends(authenticated)])
+    def bundle(id: str):
+        import io,zipfile
+        from fastapi.responses import Response
+        row=store.get(id)
+        if not row: raise HTTPException(404,'NOT_FOUND')
+        required=('cv.pdf','cv.docx','cover-letter.pdf','cover-letter.docx')
+        if not all(n in (payload(row).get('documents') or {}) for n in required): raise HTTPException(404,'DOCUMENTS_NOT_READY')
+        root=(settings.data_dir/'applications').resolve()
+        folder=(root/id).resolve()
+        if not folder.is_relative_to(root): raise HTTPException(404,'NOT_FOUND')
+        names=('cv.pdf','cv.docx','cover-letter.pdf','cover-letter.docx','tailoring-report.json')
+        if not all((folder/n).is_file() and not (folder/n).is_symlink() for n in names): raise HTTPException(404,'DOCUMENTS_NOT_READY')
+        output=io.BytesIO()
+        with zipfile.ZipFile(output,'w',compression=zipfile.ZIP_DEFLATED) as z:
+            for name in names: z.write(folder/name,name)
+            z.writestr('LEIA.txt','Documentos preparados para esta vaga. Revise antes de enviar. Formato de coluna unica e texto extraivel; nao existe garantia de aprovacao pelo ATS. O relatorio lista correspondencias lexicais e lacunas, sem inventar qualificacoes.\n')
+        return Response(output.getvalue(),media_type='application/zip',headers={'Content-Disposition':'attachment; filename="candidatura.zip"'})
 
     @app.post('/applications/{id}/resume',dependencies=[Depends(authenticated)])
     def resume(id: str):

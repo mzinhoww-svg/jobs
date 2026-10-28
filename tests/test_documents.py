@@ -32,3 +32,15 @@ class DocumentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             generate_documents(p,{'title':'Lead','company':'Example','description':'Lead team','language':'en'},Path(d))
             self.assertNotIn('Invented', '\n'.join(x.text for x in Document(Path(d)/'cv.docx').paragraphs))
+
+    def test_translated_evidence_uses_job_language_and_keeps_fact_identity(self):
+        import json
+        profile={'full_name':'Fictional Candidate','preferred_email':'fixture@example.invalid','location':'São Paulo, Brazil','facts':[{'id':'translation-1','text':'Novos negócios e parcerias','translations':{'en':'New business development and partnerships'},'source':'controlled fixture','date':'2026-10-27','source_kind':'candidate_declaration','confirmation':'confirmed'}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            generate_documents(profile,{'title':'Partnerships Lead','company':'Fictional Labs','language':'en','description':'Develop partnerships and lead new business opportunities.'},Path(tmp))
+            text=(Path(tmp)/'cv.txt').read_text()
+            self.assertIn('New business development and partnerships',text)
+            self.assertNotIn('Novos negócios',text)
+            report=json.loads((Path(tmp)/'tailoring-report.json').read_text())
+            self.assertEqual(report['selected_fact_ids'],['translation-1'])
+            self.assertEqual(report['method'],'lexical_evidence_matching')

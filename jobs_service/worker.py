@@ -8,6 +8,7 @@ import signal
 import time
 import uuid
 from pathlib import Path
+from contextlib import AsyncExitStack
 from urllib.parse import urljoin
 import httpx
 from playwright.async_api import Error as BrowserError
@@ -15,7 +16,9 @@ from .browser import BrowserSession, GreenhouseAdapter, parse_posting
 from .config import Settings
 from .documents import generate_documents
 from .gmail import Gmail
-from .policy import Blocked, detect_ats, choose_salary, profile_view, public_url, verified_fact
+from .reader import read_posting
+from .intelligence import analyze_posting,extract_url,ai_config,ai_enabled
+from .policy import Blocked, detect_ats, choose_salary, profile_view, public_url, verified_fact, approved_hosts, document_profile_view
 from .store import Store
 
 
@@ -23,7 +26,7 @@ async def resolve_redirects(url,settings):
     proxy=bool(os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy'))
     async with httpx.AsyncClient(timeout=20,follow_redirects=False) as client:
         for _ in range(8):
-            public_url(url,settings.allowed_hosts,resolve=not proxy)
+            public_url(url,approved_hosts(url,settings.allowed_hosts),resolve=not proxy)
             r=await client.get(url,headers={'User-Agent':'PrivateJobsService/0.1'})
             if r.status_code in (404,410): raise Blocked('VAGA_ENCERRADA')
             if r.status_code in (301,302,303,307,308):
@@ -82,21 +85,55 @@ async def process(row,store,settings,session_factory=BrowserSession):
         profile=json.loads(profile_path.read_text())
         context_path=settings.data_dir/'contexts'/(id+'.json')
         context=json.loads(context_path.read_text()) if context_path.exists() else {}
-        async with session_factory(settings) as session:
-            # A fixture session does not make network requests; real sessions
-            # resolve redirects through a separate read-only, validated client.
-            url=await resolve_redirects(row['url'],settings) if session_factory is BrowserSession else row['url']
-            response=await session.page.goto(url,wait_until='domcontentloaded',timeout=30000)
-            if response and response.status in (404,410): raise Blocked('VAGA_ENCERRADA')
-            frames=[f.url for f in session.page.frames if f!=session.page.main_frame]
-            ats,identity=detect_ats(session.page.url,frames)
-            if not identity: raise Blocked('ATS_ADAPTER_NOT_IMPLEMENTED')
-            if not store.identify(id,identity): return
-            job=await parse_posting(session.page)
-            frame=next((f for f in session.page.frames if detect_ats(f.url,[])[1]==identity),session.page)
-            if not job.get('country') and frame!=session.page:
-                framed=await parse_posting(frame)
-                if framed.get('country'): job=framed
+        async with AsyncExitStack() as stack:
+            ai_selection=None
+            ai_error=None
+            try: intelligence_on=ai_enabled(settings.data_dir)
+            except Blocked as error:
+                intelligence_on=False;ai_error=error.code
+            manual=json.loads(row['payload']).get('manual_posting')
+            if manual:
+                job={**manual,'canonical_url':row['url'],'source':'user_provided_posting'}
+                ats,identity=detect_ats(row['url'],[])
+                frame=None
+            elif session_factory is BrowserSession:
+                ats,identity=detect_ats(row['url'],[])
+                frame=None
+                if os.environ.get('TAVILY_API_KEY') and intelligence_on:
+                    try:
+                        text=await extract_url(row['url'],os.environ['TAVILY_API_KEY'])
+                        job={'description':text,'canonical_url':row['url']}
+                    except Blocked:
+                        job,text=await read_posting(row['url'],settings)
+                else:
+                    job,text=await read_posting(row['url'],settings)
+                ats=job.get('ats',ats);identity=job.get('identity',identity)
+                if identity and not store.identify(id,identity): return
+            else:
+                session=await stack.enter_async_context(session_factory(settings))
+                url=await resolve_redirects(row['url'],settings) if session_factory is BrowserSession else row['url']
+                response=await session.page.goto(url,wait_until='domcontentloaded',timeout=30000)
+                if response and response.status in (404,410): raise Blocked('VAGA_ENCERRADA')
+                frames=[f.url for f in session.page.frames if f!=session.page.main_frame]
+                ats,identity=detect_ats(session.page.url,frames)
+                if identity and not store.identify(id,identity): return
+                job=await parse_posting(session.page)
+                frame=next((f for f in session.page.frames if identity and detect_ats(f.url,[])[1]==identity),session.page)
+                if not job.get('country') and frame!=session.page:
+                    framed=await parse_posting(frame)
+                    if framed.get('country'): job=framed
+            if intelligence_on:
+                source='\n'.join(str(job.get(k) or '') for k in ('title','company','description'))
+                try:
+                    provider,key,model=ai_config(settings.data_dir)
+                    ai_selection=await analyze_posting(source,profile.get('facts',[]),key,model,provider)
+                    extracted=ai_selection['job']
+                    if not manual: job['language']=extracted['language']
+                    for field in ('title','company','country','language'):
+                        if not job.get(field): job[field]=extracted.get(field)
+                except Blocked as error:
+                    ai_error=error.code
+                    if not job.get('title') or not job.get('company'): raise
             # Private, traceable observations can supplement missing metadata.
             for key in ('country','company','language'):
                 fact=context.get(key,{})
@@ -107,30 +144,45 @@ async def process(row,store,settings,session_factory=BrowserSession):
                 store.finish(id,owner,'EM_ANALISE','ANALYSIS_COMPLETE')
                 return
             if not job.get('title') or not job.get('company'): raise Blocked('JOB_METADATA_INCOMPLETE')
-            view=profile_view(profile,job.get('country'))
+            view=document_profile_view(profile,job.get('country'))
             if not view['facts']: raise Blocked('CONFIRMED_CAREER_FACTS_REQUIRED')
             output=settings.data_dir/'applications'/id
             output.mkdir(parents=True,exist_ok=True,mode=0o700)
             salary=None
+            salary_issue=None
             research=context.get('salary_research') or job.get('salary')
             if research:
                 floors={currency:values.get('annual',values.get('monthly',0)*12)
-                        for currency,values in profile['compensation']['salary_base_floors'].items()}
+                        for currency,values in profile.get('compensation',{}).get('salary_base_floors',{}).items()}
                 # Fit is based on overlap with confirmed evidence, not a fabricated ATS score.
                 description=job.get('description','').lower()
                 evidence=' '.join(f['text'] for f in view['facts']).lower()
                 concepts=('payment','partner','product','financial','loyalty')
                 required=[c for c in concepts if c in description]
                 fit=sum(c in evidence for c in required)/len(required) if required else .5
-                salary=choose_salary(research,floors,fit)
+                try: salary=choose_salary(research,floors,fit)
+                except Blocked as e: salary_issue=e.code
                 (output/'salary_research.json').write_text(json.dumps(salary,ensure_ascii=False,indent=2))
             else:
                 (output/'salary_research.json').write_text(json.dumps({'status':'MISSING','reason':'NO_VERIFIED_PUBLISHED_RANGE_OR_COMPANY_COMPARABLES'}))
-            docs=generate_documents(view,job,output)
-            store.checkpoint(id,owner,'DOCUMENTOS_PRONTOS',{'documents':docs,'salary':salary})
+            docs=generate_documents(view,{**job,'ats':ats,'ai_selection':ai_selection,'ai_error':ai_error},output)
+            tailoring=json.loads((output/'tailoring-report.json').read_text())
+            store.checkpoint(id,owner,'DOCUMENTOS_PRONTOS',{'documents':docs,'salary':salary,'tailoring':tailoring})
             if row['mode']=='prepare':
                 store.finish(id,owner,'DOCUMENTOS_PRONTOS','PREPARE_COMPLETE_NO_UPLOAD')
                 return
+            if ats=='Greenhouse' and identity and frame is None and not manual:
+                session=await stack.enter_async_context(BrowserSession(settings))
+                url=await resolve_redirects(job.get('application_url',row['url']),settings)
+                await session.page.goto(url,wait_until='domcontentloaded',timeout=30000)
+                observed_ats,observed_identity=detect_ats(session.page.url,[f.url for f in session.page.frames])
+                if observed_identity!=identity: raise Blocked('REQUISITION_CONTEXT_MISMATCH')
+                frame=next((f for f in session.page.frames if detect_ats(f.url,[])[1]==identity),session.page)
+            if ats!='Greenhouse' or not identity or frame is None:
+                store.finish(id,owner,'DOCUMENTOS_PRONTOS','MANUAL_SUBMISSION_REQUIRED')
+                return
+            if salary_issue: raise Blocked(salary_issue)
+            view=profile_view(profile,job.get('country'))
             adapter=GreenhouseAdapter(frame,identity)
             await adapter.captcha()
             form_text=(await (await adapter.form()).inner_text()).lower()

@@ -120,7 +120,7 @@ c.request('GET','/system/status',headers={'Authorization':'Bearer '+token})
 r=c.getresponse()
 assert r.status==200, 'AUTHENTICATED_STATUS_FAILED'
 status=json.loads(r.read())
-assert status['version']=='0.2.0', 'UNEXPECTED_APP_VERSION'
+assert status['version']=='0.3.0', 'UNEXPECTED_APP_VERSION'
 c.close()
 c=http.client.HTTPConnection('127.0.0.1',8787,timeout=10)
 c.request('GET','/applications')

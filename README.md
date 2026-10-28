@@ -96,3 +96,9 @@ Os testes controlados não comprovam uma candidatura real nem validam o perfil p
 Para a VPS já instalada, execute `git pull --ff-only` e `bash deploy/disable-token.sh` dentro do checkout. O script guarda a configuração privada anterior, define `JOBS_AUTH_MODE=none` somente na API e usa o atualizador existente. A página abre diretamente no painel, sem armazenar ou pedir token. O arquivo do token existente não é apagado.
 
 **Com essa opção, qualquer pessoa com o endereço pode ler candidaturas, baixar documentos, adicionar vagas e solicitar ações disponíveis na fila.** O limite de ATS e as verificações de comprovação continuam valendo. Use apenas quando esse acesso público for intencional. Para voltar à proteção, configure `JOBS_AUTH_MODE=bearer` na API do arquivo privado de Compose e recrie somente a API. Valores desconhecidos impedem a inicialização; o padrão permanece `bearer`.
+
+## Leitura de URL, IA e documentos para outros ATS
+
+Na versão 0.3, cole uma URL HTTPS pública. O leitor Chromium remoto tenta extrair o anúncio. OpenRouter ou AI Gateway podem analisar o texto com `deepseek/deepseek-v4.1-flash`; a configuração é privada, por `bash deploy/configure-ai.sh openrouter` (ou `gateway`), que valida a credencial antes de salvar. Tavily é um extrator opcional quando `TAVILY_API_KEY` estiver configurada no worker; a implementação usa API direta, sem depender de um MCP conectado ao chat.
+
+O envio automático continua restrito ao adaptador Greenhouse validado em testes controlados. Para outros ATS, são preparados CV e carta em PDF/DOCX, pacote ZIP e relatório de evidências/lacunas para envio manual. Se o portal não puder ser lido, preencha a descrição manual no painel. Perfil pessoal e chave de IA precisam existir no volume privado da VPS; não são herdados desta conversa. A matriz, os limites e o estado dos testes reais estão em [docs/PLATAFORMAS.md](docs/PLATAFORMAS.md).

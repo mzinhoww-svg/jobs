@@ -59,3 +59,9 @@ Nenhum desses itens é resolvido por um PID, healthcheck ou saída zero de teste
 - Imagem Docker usa diretórios graváveis temporários para Chromium/Crashpad; não depende de um diretório home inexistente.
 
 A execução controlada não é comprovação de atualização da VPS. A implantação existente deve executar `deploy/update-ui.sh` e apresentar `PAINEL_ATUALIZADO`; o login deve então ser conferido no navegador. Gmail e Appllama não foram validados como integrações operacionais.
+
+## Versão 0.3: URL, IA e documentos universais
+
+70 testes passaram no host, incluindo sete verificações de implantação; a imagem Docker passou nos 63 testes de aplicação, com as sete verificações de host ignoradas por ausência de Docker CLI dentro do container. Cobertura: URL pública, rejeição de destinos privados, TLS real com verificação do nome original, redirecionamento privado não seguido, JSON-LD malformado, modelo limitado a IDs e citações válidos, provedor Gateway/OpenRouter, descrição manual persistente sem navegador, documento localizado, pacote ZIP e invalidação de documentos antigos após edição.
+
+Perfil pessoal canônico e instalador de importação foram preparados exclusivamente fora do checkout; documentos de teste privado foram gerados e a apresentação brasileira verificada sem Miami/visto. Isso não demonstra importação do perfil na VPS. A chamada real ao Gateway foi recusada por credencial, enquanto os catálogos confirmaram o modelo escolhido. OpenRouter não disponibilizou uma chave ao executor desta sessão. Nenhuma candidatura real foi enviada e nenhum novo adaptador de envio automático foi declarado como suportado.

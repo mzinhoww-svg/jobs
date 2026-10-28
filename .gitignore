@@ -29,3 +29,9 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+
+# AI credentials belong only in private runtime storage
+ai-config.json
+profile.json
+ai-config.*
+APLICAR_PERFIL_PRIVADO.sh

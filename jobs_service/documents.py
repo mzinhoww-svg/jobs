@@ -13,6 +13,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from pypdf import PdfReader
 from .policy import Blocked, verified_fact
+from .tailoring import tailor
 
 
 def generate_documents(profile, job, output):
@@ -21,12 +22,12 @@ def generate_documents(profile, job, output):
     language=job.get('language','en')
     if language not in ('en','pt'):
         raise Blocked('DOCUMENT_LANGUAGE_UNSUPPORTED')
-    facts=[f for f in profile.get('facts',[]) if verified_fact(f)]
-    terms=set(re.findall(r'\w{4,}',job.get('description','').lower()))
-    facts=sorted(facts,key=lambda f: -len(terms & set(re.findall(r'\w{4,}',f['text'].lower()))))
+    localized={**profile,'facts':[{**f,'text':f.get('translations',{}).get(language,f['text'])} for f in profile.get('facts',[])]}
+    facts,tailoring=tailor(localized,job)
     contact=' | '.join(str(profile.get(k)) for k in ('location','preferred_email','phone','linkedin') if profile.get(k))
-    heading='Experiência e contribuições verificadas' if language=='pt' else 'Verified experience and contributions'
-    cv=[profile['full_name'],job['title'],contact,heading]+[f['text'] for f in facts]
+    heading='Experiência profissional' if language=='pt' else 'Professional experience'
+    cv=[profile['full_name'],('Objetivo: ' if language=='pt' else 'Target role: ')+job['title'],contact,
+        'Resumo profissional' if language=='pt' else 'Professional summary']+[f['text'] for f in facts[:2]]+[heading]+[f['text'] for f in facts]
     if language=='pt':
         letter=[profile['full_name'],contact,f"Candidatura: {job['title']} — {job['company']}",
                 'Prezada equipe de seleção,',
@@ -36,6 +37,12 @@ def generate_documents(profile, job, output):
                 'Dear hiring team,',
                 f"I am applying for the {job['title']} position at {job['company']}. The following contributions from my background are relevant to the published scope:"]
     letter += [f['text'] for f in facts[:3]]
+    matches=(tailoring.get('ai') or {}).get('matches',[])
+    if matches:
+        by_id={f['id']:f['text'] for f in facts}
+        letter += ['Conexão com os requisitos publicados' if language=='pt' else 'Connection to published requirements']
+        for match in matches[:3]:
+            letter += [('Requisito publicado: ' if language=='pt' else 'Published requirement: ')+match['requirement'],by_id[match['fact_id']]]
     letter += ['Atenciosamente,' if language=='pt' else 'Kind regards,',profile['full_name']]
     result={}
     font=Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
@@ -68,5 +75,7 @@ def generate_documents(profile, job, output):
             path=output/(prefix+'.'+ext)
             path.chmod(0o600)
             result[path.name]={'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'bytes':path.stat().st_size}
+    (output/'tailoring-report.json').write_text(json.dumps(tailoring,ensure_ascii=False,indent=2))
+    (output/'tailoring-report.json').chmod(0o600)
     (output/'document-manifest.json').write_text(json.dumps({'documents':result,'fact_ids':[f['id'] for f in facts]},indent=2))
     return result
